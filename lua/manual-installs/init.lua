@@ -14,37 +14,25 @@ H.setup_config = function(config)
   config = vim.tbl_deep_extend('force', vim.deepcopy(MD.config), config or {})
 
   H.check_type('paths', config.paths, 'table')
-  H.check_type('path.download', config.path.download, 'string')
+  H.check_type('paths.download', config.paths.download, 'string')
   H.check_type('github_zip_base_str_pattern', config.github_zip_base_str_pattern, 'string')
-  H.check_type('wait_seconds', config.wait_seconds, 'integer')
-  H.check_type('max_retries_for_zip_file', config.max_retries_for_zip_file, 'integer')
+  -- H.check_type('wait_seconds', config.wait_seconds, 'integer')
+  -- H.check_type('max_retries_for_zip_file', config.max_retries_for_zip_file, 'integer')
   -- H.check_type('silent', config.silent, 'boolean')
 
   return config
 end
 
--- -- print a table
--- H.tprint = function(t_, notify)
---   for i, e in ipairs(t_) do
---     if notify ~= nil then
---       vim.notify(i .. ": " .. e)
---     else
---       print(i .. ": " .. e)
---     end
---   end
--- end
---
--- end helpers
-
 MD.config = {
   paths = {
-    download = vim.env.HOME .. "/Downloads"
+    download = vim.env.HOME .. "/Downloads",
+    path_packages = vim.fn.stdpath('data') .. '/site/pack/deps/opt/'
   },
   github_zip_base_str_pattern = "https://codeload.github.com/%s/zip/refs/heads/%s",
   wait_seconds = 5,
   max_retries_for_zip_file = 5,
-  branchs = {'main', 'master'},
   unzip_wait_time = 1000, -- time to wait for unzip operation
+  branchs = {'main', 'master'},
   -- silent = false,
 }
 
@@ -199,6 +187,24 @@ MD.rename_folder = function(origin)
   end
 end
 
+
+
+---@oaram string folder
+MD.remove_branch_from_string = function(folder)
+  local parts = vim.split(folder, '-', { plain = true })
+  local filtered_parts = {}
+
+  for _, part in ipairs(parts) do
+      if not vim.tbl_contains(MD.config.branchs, part) then
+          table.insert(filtered_parts, part)
+      end
+  end
+
+  local result = table.concat(filtered_parts, '-')
+  return result
+end
+
+
 ---@return string path folder without file extention
 MD.stem_path = function(path)
   local parts = vim.split(path, '/', { plain = true })
@@ -207,10 +213,10 @@ MD.stem_path = function(path)
 end
 
 ---@param author_repo_name string The repository name in the pattern: bkemmer/dot-files
----@param output_dir string Destination folder to be downloaded
+---@param output_dir string|nil Destination folder to be downloaded
 ---@param custom_branch string|nil Specific branch to be used
 MD.downloader = function(author_repo_name, output_dir, custom_branch)
-  H.check_type('output_dir', output_dir, 'string', false)
+  H.check_type('output_dir', output_dir, 'string', true)
   H.check_type('custom_branch', custom_branch, 'string', true)
 
   -- check if this branch hierarchy exists
@@ -223,7 +229,13 @@ MD.downloader = function(author_repo_name, output_dir, custom_branch)
     local zip_filename = MD.get_zip_filename(repo_name, branch)
     local full_filepath = MD.get_full_path_with_downloads_folder(zip_filename)
 
-    local destination_folder = output_dir .. '/' .. MD.stem_path(full_filepath)
+
+    if output_dir == nil then
+      output_dir = MD.config.path_packages
+    end
+
+    local folder_name = MD.remove_branch_from_string(MD.stem_path(full_filepath))
+    local destination_folder = output_dir .. '/' .. folder_name
     if MD.check_if_path_already_exists(destination_folder) then
       vim.notify("Folder " .. destination_folder .. " already exists.", vim.log.levels.ERROR)
       return
@@ -252,11 +264,21 @@ MD.downloader = function(author_repo_name, output_dir, custom_branch)
 
 end
 
+return MD
+
+-- local a = 1
+-- print("a")
 -- tests
 -- MD.downloader("bkemmer/dot-files", vim.env.HOME .. "/projects/tmp")
--- MD.downloader("Olivine-Labs/lua-style-guide")
+-- MD.downloader("bkemmer/dot-files")
+  -- MD.downloader("Olivine-Labs/lua-style-guide")
 -- local full_path = MD.wait_for_file('obs2.png')
 
 -- local full_path = MD.wait_for_file("enel.zip")
 -- MD.unzip_file(full_path, MD.config.paths.download)
-return MD
+--
+-- local tmp = MD.setup({
+--   paths = {
+--     path_packages = vim.fn.stdpath('data') .. '/site/pack/deps/opt/'
+--   }
+-- })
