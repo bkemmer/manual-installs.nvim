@@ -223,7 +223,7 @@ MD.downloader = function(author_repo_name, output_dir, custom_branch)
   local repo_name = MD.get_repo_name(author_repo_name)
   local url, branch  = MD.get_valid_url(author_repo_name, custom_branch)
 
-  if url ~= nil then
+  if url then
     print(url, branch)
 
     local zip_filename = MD.get_zip_filename(repo_name, branch)
@@ -262,6 +262,15 @@ MD.downloader = function(author_repo_name, output_dir, custom_branch)
 
   end
 
+end
+
+---@param source_tbl table Specific branch to be used
+MD.add = function(source_tbl)
+  H.check_type('source_tbl', source_tbl, 'table', false)
+  local source = source_tbl['source']
+  if source then
+    MD.downloader(source)
+  end
 end
 
 return MD
