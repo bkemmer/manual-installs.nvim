@@ -23,6 +23,21 @@ H.setup_config = function(config)
   return config
 end
 
+H.folder_exists = function(path)
+  local stat = vim.loop.fs_stat(path)
+  return stat and stat.type == 'directory'
+end
+
+H.move_folder = function(origin, destination)
+  local result = vim.fn.system('mv ' .. vim.fn.shellescape(origin) .. ' ' .. vim.fn.shellescape(destination))
+  if vim.v.shell_error ~= 0 then
+    vim.notify("Failure to rename the folder: " .. origin .. "to: " .. destination, vim.log.levels.ERROR)
+  end
+  return result
+end
+
+-- Setup
+--
 MD.config = {
   paths = {
     download = vim.env.HOME .. "/Downloads",
@@ -137,6 +152,19 @@ MD.unzip_file = function(full_zip_path, output_dir)
   end)
 end
 
+
+---@param full_zip_path string Full path to zip file
+MD.get_first_directory_inside_zip_file = function(full_zip_path)
+  local cmd = string.format("unzip -l %s | awk '/\\/$/ {print $4; exit}'",
+                           vim.fn.shellescape(full_zip_path))
+  local result = vim.fn.system(cmd)
+  if vim.v.shell_error == 0 and result ~= "" then
+    local dir_str = vim.trim(result):gsub("/+$", "") -- trim spaces and trailling /
+    return dir_str
+  end
+  return nil
+end
+
 MD.get_repo_name = function(author_repo_name)
   local parts = vim.split(author_repo_name, "/", { plain = true })
   return parts[#parts]
@@ -170,6 +198,8 @@ end
 
 ---@param origin string Full path of unziped folder usually with the posfix -<branch_name>
 MD.rename_folder = function(origin)
+
+  if not H.folder_exists(origin) then return nil end
   local parts = vim.split(origin, "-", { plain = true })
   local last_part = parts[#parts]
   for _, branch in ipairs(MD.config.branchs) do
@@ -178,16 +208,10 @@ MD.rename_folder = function(origin)
       table.move(parts, 1, #parts - 1, 1, destination) -- Removing the posfix
       local destination_str = table.concat(destination, '-') -- returning any previous -
       vim.notify("Renaming " .. origin .. " to " .. destination_str)
-      local success, err = vim.loop.fs_rename(origin, destination_str)
-      if not success then
-        vim.notify("Failure to rename the folder with err: " .. err, vim.log.levels.ERROR)
-      end
-      return
+      local success = H.move_folder(origin, destination_str)
     end
   end
 end
-
-
 
 ---@oaram string folder
 MD.remove_branch_from_string = function(folder)
@@ -209,7 +233,7 @@ end
 MD.stem_path = function(path)
   local parts = vim.split(path, '/', { plain = true })
   local last_part = parts[#parts]
-  return vim.split(last_part, '.', { plain = true })[1]
+  return vim.fn.fnamemodify(last_part, ':r')
 end
 
 ---@param author_repo_name string The repository name in the pattern: bkemmer/dot-files
@@ -231,11 +255,11 @@ MD.downloader = function(author_repo_name, output_dir, custom_branch)
 
 
     if output_dir == nil then
-      output_dir = MD.config.path_packages
+      output_dir = MD.config.paths.path_packages
     end
 
     local folder_name = MD.remove_branch_from_string(MD.stem_path(full_filepath))
-    local destination_folder = output_dir .. '/' .. folder_name
+    local destination_folder = output_dir .. folder_name
     if MD.check_if_path_already_exists(destination_folder) then
       vim.notify("Folder " .. destination_folder .. " already exists.", vim.log.levels.ERROR)
       return
@@ -252,16 +276,15 @@ MD.downloader = function(author_repo_name, output_dir, custom_branch)
       if success then
         vim.notify("File ready at: " .. full_filepath)
         vim.notify("Unzipping file: " .. full_filepath .. " to " .. output_dir)
+        local first_zip_dir = MD.get_first_directory_inside_zip_file(full_filepath)
         MD.unzip_file(full_filepath, output_dir)
         vim.wait(MD.config.unzip_wait_time) -- wait some time to the unzip operation
-        MD.rename_folder(destination_folder)
+        MD.rename_folder(output_dir .. first_zip_dir)
       else
         vim.notify("File not found: " .. full_filepath)
       end
     end)
-
   end
-
 end
 
 ---@param source_tbl table Specific branch to be used
@@ -273,21 +296,16 @@ MD.add = function(source_tbl)
   end
 end
 
+---@param fn function The function to execute
+MD.now = function(fn)
+  fn()
+end
+
+---@param fn function The function to execute
+MD.later = function(fn)
+  fn()
+end
+
 return MD
 
--- local a = 1
--- print("a")
--- tests
--- MD.downloader("bkemmer/dot-files", vim.env.HOME .. "/projects/tmp")
--- MD.downloader("bkemmer/dot-files")
-  -- MD.downloader("Olivine-Labs/lua-style-guide")
--- local full_path = MD.wait_for_file('obs2.png')
 
--- local full_path = MD.wait_for_file("enel.zip")
--- MD.unzip_file(full_path, MD.config.paths.download)
---
--- local tmp = MD.setup({
---   paths = {
---     path_packages = vim.fn.stdpath('data') .. '/site/pack/deps/opt/'
---   }
--- })
