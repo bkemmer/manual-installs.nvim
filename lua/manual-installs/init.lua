@@ -197,6 +197,7 @@ MD.ask_remove_file = function(full_filepath)
 end
 
 ---@param origin string Full path of unziped folder usually with the posfix -<branch_name>
+---@return string|nil destination_str Returns the output folder name
 MD.rename_folder = function(origin)
 
   if not H.folder_exists(origin) then return nil end
@@ -209,6 +210,9 @@ MD.rename_folder = function(origin)
       local destination_str = table.concat(destination, '-') -- returning any previous -
       vim.notify("Renaming " .. origin .. " to " .. destination_str)
       local success = H.move_folder(origin, destination_str)
+      if success then
+        return destination_str
+      end
     end
   end
 end
@@ -279,7 +283,8 @@ MD.downloader = function(author_repo_name, output_dir, custom_branch)
         local first_zip_dir = MD.get_first_directory_inside_zip_file(full_filepath)
         MD.unzip_file(full_filepath, output_dir)
         vim.wait(MD.config.unzip_wait_time) -- wait some time to the unzip operation
-        MD.rename_folder(output_dir .. first_zip_dir)
+        local destination_folder_str = MD.rename_folder(output_dir .. first_zip_dir)
+        vim.cmd("packadd " .. destination_folder_str)
       else
         vim.notify("File not found: " .. full_filepath)
       end
